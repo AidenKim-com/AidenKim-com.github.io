@@ -1,0 +1,11 @@
+[
+  
+    {
+      "title"    : "CVE-2024-38063 - Windows TCP/IP IPv6 Vulnerability Analysis",
+      "description" : "TOOR 팀 활동을 하며 분석하게된 윈도우 커널 드라이버 원데이 취약점에 관한 글입니다.",
+      "tags"     : "1-day, exploit, tcpip.sys, windows",
+      "url"      : "/CVE-2024-38063/",
+      "date"     : "2024-10-04 01:06:00 +0900"
+    } 
+  
+]
