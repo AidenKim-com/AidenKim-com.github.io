@@ -1,4 +1,134 @@
-<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en-US"><generator uri="https://jekyllrb.com/" version="4.1.1">Jekyll</generator><link href="http://localhost:4444/feed.xml" rel="self" type="application/atom+xml" /><link href="http://localhost:4444/" rel="alternate" type="text/html" hreflang="en-US" /><updated>2024-11-08T09:20:16+09:00</updated><id>http://localhost:4444/feed.xml</id><title type="html">41D3N</title><subtitle>I&apos;m nobody</subtitle><author><name>Aiden</name><email>aidencom99@email.com</email></author><entry><title type="html">CVE-2021-24086 - Analysis of Windows TCP/IP IPv6 Denial of Service (DoS) Vulnerability</title><link href="http://localhost:4444/CVE-2021-24086/" rel="alternate" type="text/html" title="CVE-2021-24086 - Analysis of Windows TCP/IP IPv6 Denial of Service (DoS) Vulnerability" /><published>2024-11-05T09:00:00+09:00</published><updated>2024-11-05T09:00:00+09:00</updated><id>http://localhost:4444/CVE-2021-24086</id><content type="html" xml:base="http://localhost:4444/CVE-2021-24086/"><![CDATA[<p><img src="/assets/img/CVE-2021-24086/title.png" /></p>
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en-US"><generator uri="https://jekyllrb.com/" version="4.1.1">Jekyll</generator><link href="http://localhost:4444/feed.xml" rel="self" type="application/atom+xml" /><link href="http://localhost:4444/" rel="alternate" type="text/html" hreflang="en-US" /><updated>2024-11-28T17:08:17+09:00</updated><id>http://localhost:4444/feed.xml</id><title type="html">41D3N</title><subtitle>I&apos;m nobody</subtitle><author><name>Aiden</name><email>aidencom99@email.com</email></author><entry><title type="html">CVE-2023-29360 Windows Kernel Streaming Service Vulnerability</title><link href="http://localhost:4444/CVE-2023-29360/" rel="alternate" type="text/html" title="CVE-2023-29360 Windows Kernel Streaming Service Vulnerability" /><published>2024-11-28T09:00:00+09:00</published><updated>2024-11-28T09:00:00+09:00</updated><id>http://localhost:4444/CVE-2023-29360</id><content type="html" xml:base="http://localhost:4444/CVE-2023-29360/"><![CDATA[<h1 id="intro">Intro</h1>
+
+<p>TOOR 팀 활동을 하며 분석하게된 윈도우 커널 스트리밍 서비스 원데이 취약점에 관한 글입니다.</p>
+<p align="center"><img src="/assets/img/toor.png" /></p>
+
+<p>이번에 알아볼 취약점은 2023년 6월 13일에 공개된 윈도우 커널 스트리밍 서비스 드라이버에서 발생하는 LPE 취약점 입니다.</p>
+
+<p>mskssrv.sys에서 MDL을 처리하는 과정의 잘못된 인자 설정으로 인해 임의의 커널 영역을 유저 영역에서 덮어쓸 수 있게하는 취약점입니다. 이를 통해 공격자는 권한 상승을 하여 관리자 권한의 쉘을 획득하는 것이 가능해집니다.</p>
+
+<p>본 글은 선행 연구를 진행하신 다른 연구원분들의 글들을 읽고 제 나름 분석을 진행하며 취약점을 공부하며 이해하고 정리해본 결과로 작성하게된 글입니다. 나름의 분석을 해봤지만 맞지 않는 부분이 있을 수 있으며, 만약 이를 발견하셨을 시 피드백해주시면 적극 반영하도록 하겠습니다. 취약점 및 PoC 분석에 많은 도움이된 자료는 다음과 같습니다.</p>
+
+<ul>
+  <li><a href="https://big5-sec.github.io/posts/CVE-2023-29360-analysis/">https://big5-sec.github.io/posts/CVE-2023-29360-analysis/</a></li>
+  <li><a href="https://github.com/Nero22k/cve-2023-29360">https://github.com/Nero22k/cve-2023-29360</a></li>
+  <li><a href="https://blog.theori.io/chaining-n-days-to-compromise-all-part-3-windows-driver-lpe-medium-to-system-12f7821d97bb">https://blog.theori.io/chaining-n-days-to-compromise-all-part-3-windows-driver-lpe-medium-to-system-12f7821d97bb</a></li>
+</ul>
+
+<h1 id="vuln">Vuln</h1>
+
+<ul>
+  <li>CVE-ID : CVE-2023-29360</li>
+  <li>CWE-822: Untrusted Pointer Dereference</li>
+</ul>
+
+<h1 id="rca">RCA</h1>
+
+<p>취약점은 mskssrv.sys의 FsAllocAndLockMdl 함수에서 발생합니다.</p>
+
+<p>FsAllocAndLockMdl은 다음과 같은 흐름으로 호출됩니다.</p>
+<p align="center"><img src="/assets/img/CVE-2023-29360/vulnflow.jpg" /></p>
+
+<p>패치전의 FsAllocAndLockMdl 함수에서는 MmProbeAndLockPages를 다음과 같은 형태로 호출합니다.</p>
+<p align="center"><img src="/assets/img/CVE-2023-29360/FsAllocAndLockMdl.png" /></p>
+<p>FsAllocAndLockMdl은 전달받은 VA를 물리주소와 매핑하는 MDL을 만들고 페이징 잠금을 진행합니다.</p>
+
+<p>이때  MmProbeAndLockPages의 첫 번째, 두 번째 인자는 매핑할 가상주소 및 크기이며 유저 영역의 데이터를 통해 값을 설정할 수 있습니다.  세 번째 인자는 AccessMode로 MmProbeAndLockPages로 잠글 MDL이 유저 모드인지 커널모드인지에 따라 주소 검증을 진행합니다.</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">__int64</span> <span class="kr">__fastcall</span> <span class="nf">MiProbeAndLockPrepare</span><span class="p">(</span>
+        <span class="n">__int64</span> <span class="n">a1</span><span class="p">,</span>
+        <span class="n">__int64</span> <span class="n">a2</span><span class="p">,</span>
+        <span class="kt">unsigned</span> <span class="n">__int64</span> <span class="n">a3</span><span class="p">,</span>
+        <span class="kt">unsigned</span> <span class="kt">int</span> <span class="n">a4</span><span class="p">,</span>
+        <span class="kt">char</span> <span class="n">a5</span><span class="p">,</span>
+        <span class="kt">int</span> <span class="n">a6</span><span class="p">,</span>
+        <span class="kt">int</span> <span class="n">a7</span><span class="p">)</span>
+<span class="p">{</span>
+	<span class="p">...</span>
+	  <span class="k">if</span> <span class="p">(</span> <span class="n">a5</span> <span class="o">&amp;&amp;</span> <span class="p">(</span><span class="n">v10</span> <span class="o">&gt;</span> <span class="mh">0x7FFFFFFF0000</span><span class="n">i64</span> <span class="o">||</span> <span class="n">a3</span> <span class="o">&gt;=</span> <span class="n">v10</span><span class="p">)</span> <span class="p">)</span>
+	  <span class="n">JUMPOUT</span><span class="p">(</span><span class="mh">0x140499F86</span><span class="n">i64</span><span class="p">);</span>
+	<span class="p">...</span>	
+<span class="p">}</span>
+</code></pre></div></div>
+<p>1일 경우 UserMode로 커널 영역의 가상 주소를 매핑할 수 없게 만듭니다. 하지만 패치 전의 코드에서는 커널 모드로 주소 검증이 생략됩니다.</p>
+
+<p>이를 통해 유저 영역에서 임의의 커널 주소 공간으로 MDL을 잠그는 것이 가능합니다. 이를 어떻게 악용할까요?</p>
+
+<h1 id="exploit">Exploit</h1>
+<p>IoControlCode == 0x2F0420일 경우에 호출되는 ConsumeTx는 FSFrameMdl::MapPages를 호출하게되는데, 이를 통해 사용자 영역의 주소를 앞서 잠근 커널 주소의 물리 메모리와 매핑 시킬 수 있습니다.</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">__int64</span> <span class="kr">__fastcall</span> <span class="n">FSStreamReg</span><span class="o">::</span><span class="n">ConsumeTx</span><span class="p">(</span><span class="n">FSStreamReg</span> <span class="o">*</span><span class="n">this</span><span class="p">,</span> <span class="k">struct</span> <span class="n">FSFrameInfo</span> <span class="o">*</span><span class="n">a2</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="p">...</span>
+      <span class="n">v11</span> <span class="o">=</span> <span class="n">FSFrameMdl</span><span class="o">::</span><span class="n">MapPages</span><span class="p">(</span>
+              <span class="p">(</span><span class="n">FSFrameMdl</span> <span class="o">*</span><span class="p">)</span><span class="n">v9</span><span class="p">,</span>
+              <span class="o">*</span><span class="p">((</span><span class="k">struct</span> <span class="n">_EPROCESS</span> <span class="o">**</span><span class="p">)</span><span class="n">this</span> <span class="o">+</span> <span class="mi">7</span><span class="p">),</span>
+              <span class="o">*</span><span class="p">((</span><span class="k">struct</span> <span class="n">_EPROCESS</span> <span class="o">**</span><span class="p">)</span><span class="n">this</span> <span class="o">+</span> <span class="mi">8</span><span class="p">),</span>
+              <span class="p">(</span><span class="k">struct</span> <span class="n">FSFrameInfo</span> <span class="o">*</span><span class="p">)((</span><span class="kt">char</span> <span class="o">*</span><span class="p">)</span><span class="n">a2</span> <span class="o">+</span> <span class="mi">136</span> <span class="o">*</span> <span class="n">v10</span> <span class="o">+</span> <span class="mi">40</span><span class="p">));</span>
+  <span class="p">...</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<p>이렇게 매핑된 현재 프로세스의 권한 정보를 가진 물리 메모리 영역을 덮어씀으로써 권한 상승을 할 수 있습니다.</p>
+
+<h1 id="poc">PoC</h1>
+
+<p>PoC <a href="https://github.com/Nero22k/cve-2023-29360">여기</a>에서 확인할 수 있습니다.</p>
+
+<p>PoC의 일부를 확인해보면 다음과 같습니다.</p>
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">int</span> <span class="nf">main</span><span class="p">()</span>
+<span class="p">{</span>
+	<span class="p">...</span>
+	<span class="n">tokenAddress</span> <span class="o">=</span> <span class="n">GetTokenAddress</span><span class="p">();</span>
+
+	<span class="kt">uint64_t</span> <span class="n">privaddr</span> <span class="o">=</span> <span class="n">tokenAddress</span> <span class="o">+</span> <span class="n">OFFSET_OF_TOKEN_PRIVILEGES</span><span class="p">;</span>
+	
+	<span class="p">...</span>
+	
+	<span class="n">success</span> <span class="o">=</span> <span class="n">PublishTx</span><span class="p">(</span><span class="n">DeviceH3</span><span class="p">,</span> <span class="n">privaddr</span><span class="p">);</span> <span class="c1">// 토큰 권한 영역</span>
+	
+	<span class="kt">uint8_t</span> <span class="o">*</span><span class="n">mappedAddress</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+
+	<span class="n">success</span> <span class="o">=</span> <span class="n">ConsumeTx</span><span class="p">(</span><span class="n">DeviceH3</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">mappedAddress</span><span class="p">);</span> <span class="c1">// 유저 영역에 토큰 권한 영역 매핑</span>
+
+	<span class="p">...</span>
+
+	<span class="k">if</span><span class="p">(</span><span class="n">mappedAddress</span> <span class="o">!=</span> <span class="nb">NULL</span><span class="p">)</span>
+	<span class="p">{</span>
+		<span class="c1">// Enable all privileges</span>
+		<span class="n">memset</span><span class="p">(</span><span class="n">mappedAddress</span><span class="p">,</span> <span class="mh">0xFF</span><span class="p">,</span> <span class="mh">0x10</span><span class="p">);</span>
+		<span class="n">spawnShell</span><span class="p">();</span>
+	<span class="p">}</span>
+	
+	<span class="p">...</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<p>앞서 살펴본 취약점으로 사용자 영역에 커널 영역의 물리주소를 매핑하고 이를 덮어쓴 후, 쉘을 실행시키는 것을 볼 수 있습니다.</p>
+
+<h1 id="video">Video</h1>
+
+<video width="100%" height="100%" controls="">
+  <source src="/assets/videos/CVE-2023-29360/CVE-2023-29360.mkv" type="video/webm" />
+</video>
+
+<h1 id="patch">Patch</h1>
+
+<p>이번에 알아본 취약점은 FsAllocAndLockMdl에서 다음과 같은 패치가 이루어졌습니다.</p>
+<div class="language-diff highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="gd">- MmProbeAndLockPages(Mdl, 0, IoWriteAccess);
+</span><span class="gi">+ MmProbeAndLockPages(Mdl, 1, IoWriteAccess);
+</span></code></pre></div></div>
+<p>이로써 검증 코드가 실행되어 DeviceIoControl을 통해 커널 영역을 MDL로 잠글 수 없게되었습니다.</p>
+
+<h1 id="mitigation">Mitigation</h1>
+
+<p>해당 취약점에 대한 보안 업데이트를 통해 취약점을 완화시킬 수 있습니다.</p>
+
+<h1 id="references">References</h1>
+
+<ul>
+  <li><a href="https://big5-sec.github.io/posts/CVE-2023-29360-analysis/">https://big5-sec.github.io/posts/CVE-2023-29360-analysis/</a></li>
+  <li><a href="https://github.com/Nero22k/cve-2023-29360">https://github.com/Nero22k/cve-2023-29360</a></li>
+  <li><a href="https://blog.theori.io/chaining-n-days-to-compromise-all-part-3-windows-driver-lpe-medium-to-system-12f7821d97bb">https://blog.theori.io/chaining-n-days-to-compromise-all-part-3-windows-driver-lpe-medium-to-system-12f7821d97bb</a></li>
+  <li><a href="http://bsodtutorials.blogspot.com/2013/12/understanding-mdls-memory-descriptor.html">http://bsodtutorials.blogspot.com/2013/12/understanding-mdls-memory-descriptor.html</a></li>
+  <li><a href="https://msrc.microsoft.com/update-guide/vulnerability/CVE-2023-29360">https://msrc.microsoft.com/update-guide/vulnerability/CVE-2023-29360</a></li>
+</ul>]]></content><author><name>Aiden</name><email>aidencom99@email.com</email></author><category term="1-day" /><category term="exploit" /><category term="Windows Kernel Streaming Service" /><category term="Windows" /><summary type="html"><![CDATA[CVE-2023-29360]]></summary></entry><entry><title type="html">CVE-2021-24086 - Analysis of Windows TCP/IP IPv6 Denial of Service (DoS) Vulnerability</title><link href="http://localhost:4444/CVE-2021-24086/" rel="alternate" type="text/html" title="CVE-2021-24086 - Analysis of Windows TCP/IP IPv6 Denial of Service (DoS) Vulnerability" /><published>2024-11-05T09:00:00+09:00</published><updated>2024-11-05T09:00:00+09:00</updated><id>http://localhost:4444/CVE-2021-24086</id><content type="html" xml:base="http://localhost:4444/CVE-2021-24086/"><![CDATA[<p><img src="/assets/img/CVE-2021-24086/title.png" /></p>
 <h1 id="intro">Intro</h1>
 
 <p>TOOR 팀 활동을 하며 분석하게된 윈도우 커널 드라이버 원데이 취약점에 관한 글입니다.</p>
