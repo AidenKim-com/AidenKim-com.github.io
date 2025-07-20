@@ -12,7 +12,8 @@ mode: dark # default theme "dark" | "light"
 author:
   name: Aiden # author name
   bio: >- # tell to the world
-    System hacker, infosec researcher
+    System hacker, infosec researcher<br/>
+    Currently 110% booked — overloaded, but loving the challenge.🙂
     
   username: username # general username
   github: github_username # github username
