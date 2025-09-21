@@ -1,6 +1,6 @@
 ---
 title: FortID CTF 2025 Pwnable Writeup
-published: 2025-09-20 21:30:00 +09:00
+published: 2025-09-21 13:40:00 +09:00
 description: "Pwnable Writeup"
 tags: ["CTF", "Pwnable", "Writeup"]
 image: ./title.png
